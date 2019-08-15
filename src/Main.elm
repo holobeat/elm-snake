@@ -64,6 +64,7 @@ type alias Directions =
     , left : Direction
     , up : Direction
     , down : Direction
+    , noDirection : Direction
     }
 
 
@@ -76,6 +77,7 @@ type alias Config =
     , foodCount : Int
     , initialSnake : Snake
     , initialUpdateRate : Float
+    , initialDirection : Direction
     }
 
 
@@ -89,6 +91,7 @@ config =
     , foodCount = 5
     , initialSnake = [ Position 12 15, Position 11 15, Position 10 15 ]
     , initialUpdateRate = 200
+    , initialDirection = directions.right
     }
 
 
@@ -98,6 +101,7 @@ directions =
     , left = ( -1, 0 )
     , up = ( 0, -1 )
     , down = ( 0, 1 )
+    , noDirection = ( 0, 0 )
     }
 
 
@@ -122,6 +126,7 @@ type alias Model =
     , food : Food
     , field : PlayField
     , direction : Direction
+    , directionBuffer : List Direction
     , gameStatus : GameStatus
     , updateRate : Float
     , score : Int
@@ -155,7 +160,8 @@ newModel gameStatus =
     { snake = config.initialSnake
     , food = []
     , field = newPlayField config.fieldWidth config.fieldHeight
-    , direction = directions.right
+    , direction = config.initialDirection
+    , directionBuffer = [ config.initialDirection ]
     , gameStatus = gameStatus
     , updateRate = config.initialUpdateRate
     , score = 0
@@ -197,16 +203,23 @@ update msg model =
             , Cmd.none
             )
 
-        Move direction ->
-            if model.gameStatus == Playing then
-                ( { model | direction = direction }, Cmd.none )
+        Move newDirection ->
+            if model.gameStatus == Playing && allowDirection newDirection model.directionBuffer then
+                ( { model
+                    | directionBuffer = model.directionBuffer ++ [ newDirection ]
+                  }
+                , Cmd.none
+                )
             else
                 ( model, Cmd.none )
 
         Tick posixTime ->
             let
+                newBuffer =
+                    updateDirectionBuffer model.directionBuffer
+
                 ( newSnake, removedPart ) =
-                    updateSnake model.direction model.snake
+                    updateSnake newBuffer model.snake
 
                 ( collisionTestResult, snakeHead ) =
                     evalCollision newSnake model.food
@@ -244,6 +257,7 @@ update msg model =
                                 model.updateRate - 5
                             else
                                 model.updateRate
+                        , directionBuffer = newBuffer
                       }
                     , if List.length model.food < 2 then
                         randomPositions 5
@@ -280,16 +294,47 @@ update msg model =
             ( model, Cmd.none )
 
 
+allowDirection : Direction -> List Direction -> Bool
+allowDirection ( x, y ) directionBuffer =
+    let
+        lastDirection =
+            List.head <| List.reverse directionBuffer
+    in
+        case lastDirection of
+            Just ( lastX, lastY ) ->
+                not (x + lastX == 0 || y + lastY == 0)
+                    && (( lastX, lastY ) /= ( x, y ))
+
+            _ ->
+                True
+
+
+updateDirectionBuffer : List Direction -> List Direction
+updateDirectionBuffer directionBuffer =
+    case directionBuffer of
+        [] ->
+            directionBuffer
+
+        [ _ ] ->
+            directionBuffer
+
+        h :: rest ->
+            rest
+
+
 diffList : List a -> List a -> List a
 diffList aList bList =
     List.filter (\c -> not <| List.member c bList) aList
 
 
-updateSnake : Direction -> Snake -> ( Snake, List Position )
-updateSnake ( xDir, yDir ) snake =
+updateSnake : List Direction -> Snake -> ( Snake, List Position )
+updateSnake directionBuffer snake =
     let
+        ( xDir, yDir ) =
+            Maybe.withDefault directions.noDirection <| List.head directionBuffer
+
         h =
-            Maybe.withDefault (Position -1 -1) (List.head snake)
+            Maybe.withDefault (Position -1 -1) <| List.head snake
 
         newHead =
             Position (h.x + xDir) (h.y + yDir)
