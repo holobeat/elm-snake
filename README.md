@@ -9,4 +9,4 @@ the wall.
 - The game is controlled only from keyboard, so please make sure you have focus
 on the game page. Or just focus on it by clicking the start screen.
 
-Try the game out at https://ellie-app.com/6jwD8zj3YTsa1
+Try the game out at https://ellie-app.com/6nNjY8dGH7za1
